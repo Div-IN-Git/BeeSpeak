@@ -3,22 +3,29 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
-@app.api_route("/api/honeypot", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
-async def honeypot(
+# -------- GET: reachability check --------
+@app.get("/api/honeypot")
+async def honeypot_get():
+    return {
+        "status": "success",
+        "reply": "Can you explain what you mean?"
+    }
+
+# -------- POST: agentic honeypot --------
+@app.post("/api/honeypot")
+async def honeypot_post(
     request: Request,
     x_api_key: str = Header(default=None)
 ):
-    # ---- API key check ----
     if not x_api_key:
         return JSONResponse(
             status_code=401,
             content={
                 "status": "error",
-                "reply": "Unauthorized request"
+                "reply": "Unauthorized"
             }
         )
 
-    # ---- Parse request body (GUVI sends valid JSON here) ----
     try:
         payload = await request.json()
     except Exception:
@@ -26,43 +33,39 @@ async def honeypot(
             status_code=400,
             content={
                 "status": "error",
-                "reply": "Invalid request body"
+                "reply": "Invalid request"
             }
         )
 
-    # ---- Extract fields safely ----
-    session_id = payload.get("sessionId")
     message = payload.get("message", {})
-    conversation_history = payload.get("conversationHistory", [])
+    text = message.get("text", "").strip()
+    sender = message.get("sender", "").lower()
 
-    incoming_text = message.get("text", "").lower()
-    sender = message.get("sender", "unknown")
-
-    # ---- Fake conversation history (for now, as requested) ----
-    fake_history = conversation_history or [
-        {
-            "sender": "scammer",
-            "text": "Your bank account will be blocked today.",
-            "timestamp": 1769770000000
-        }
+    # ---- Simple scam intent detection ----
+    scam_triggers = [
+        "account", "blocked", "verify", "urgent",
+        "upi", "bank", "suspend", "limited"
     ]
 
-    # ---- Simple scam intent detection (placeholder logic) ----
-    scam_keywords = ["blocked", "verify", "urgent", "account", "upi", "bank"]
-    scam_detected = any(word in incoming_text for word in scam_keywords)
-
-    # ---- Agent reply generation (human-like, non-revealing) ----
-    if scam_detected and sender == "scammer":
-        reply_text = "Why is my account being suspended?"
-    else:
-        reply_text = "Can you please explain that again?"
-
-    # ---- REQUIRED RESPONSE FORMAT (nothing extra) ----
-    return JSONResponse(
-        status_code=200,
-        content={
-            "status": "success",
-            "reply": reply_text
-        }
+    is_scam = (
+        sender == "scammer"
+        and any(word in text.lower() for word in scam_triggers)
     )
 
+    # ---- Dynamic, human-like replies ----
+    if is_scam:
+        if "account" in text.lower():
+            reply = "Why is my account being blocked?"
+        elif "upi" in text.lower():
+            reply = "Why do you need my UPI ID?"
+        elif "verify" in text.lower():
+            reply = "What exactly do I need to verify?"
+        else:
+            reply = "Can you explain this in more detail?"
+    else:
+        reply = "I’m not sure I understand. Can you clarify?"
+
+    return {
+        "status": "success",
+        "reply": reply
+    }
