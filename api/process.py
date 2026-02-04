@@ -15,7 +15,7 @@ app = Flask(__name__)
 API_KEY = os.environ.get("HONEY_POT_API_KEY", "guvi-honeypot-2026")
 
 
-@app.route("/api/process", methods=["GET", "POST"])
+@app.route("/", methods=["GET", "POST"])
 def process():
     # ---------------- AUTH ----------------
     incoming_key = request.headers.get("x-api-key")
