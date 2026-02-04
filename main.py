@@ -25,7 +25,7 @@ async def honeypot(
     full_request_data = {
         "timestamp": datetime.datetime.utcnow().isoformat(),
         "method": request.method,
-        "data": data,
+        "body": data,
         "client_ip": request.client.host if request.client else "unknown",
         "url": str(request.url),
         "headers": dict(request.headers),
@@ -78,3 +78,4 @@ async def honeypot(
             content=json.dumps(response_payload, indent=2, ensure_ascii=False),
             media_type="application/json",
         )
+
