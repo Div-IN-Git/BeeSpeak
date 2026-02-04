@@ -1,70 +1,54 @@
 from fastapi import FastAPI, Request, Header
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse
 import datetime
-import json
  
 app = FastAPI()
-
+ 
 @app.api_route("/api/honeypot", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def honeypot(
     request: Request,
     x_api_key: str = Header(default=None)
 ):
-    raw_body = await request.body()
-    data = raw_body.decode("utf-8", errors="replace") if raw_body else ""
+    body = None
+    try:
+        body = await request.json()
+    except:
+        body = await request.body()
 
-    full_request_data = {
+    safe_body = (
+        body.decode("utf-8", errors="replace")
+        if isinstance(body, bytes)
+        else body
+    )
+
+    request_data = {
         "timestamp": datetime.datetime.utcnow().isoformat(),
         "method": request.method,
-        "body": data,
-        "client_ip": request.client.host if request.client else "unknown",
         "url": str(request.url),
         "headers": dict(request.headers),
         "query_params": dict(request.query_params),
+        "body": safe_body,
+        "client_ip": request.client.host if request.client else "unknown",
     }
-
+ 
     print("Honeypot Hit:")
-    print(full_request_data)
-
-    allowed_header_keys = {
-        "accept-encoding",
-        "content-length",
-        "host",
-        "user-agent",
-        "x-api-key",
-    }
-    filtered_headers = {
-        key: value
-        for key, value in full_request_data["headers"].items()
-        if key.lower() in allowed_header_keys
-    }
-
-    response_request_data = {
-        **full_request_data,
-        "headers": filtered_headers,
-    }
-
-    print("Honeypot Hit:")
-    print(response_request_data)
-
+    print(request_data)
+ 
     if not x_api_key:
-        response_payload = {
-            "success": False,
-            "message": "Missing x-api-key",
-            "received": response_request_data,
-        }
-        return Response(
+        return JSONResponse(
             status_code=401,
-            content=json.dumps(response_payload, indent=2, ensure_ascii=False),
-            media_type="application/json",
+            content={
+                "success": False,
+                "message": "Missing x-api-key",
+                "received": request_data
+            }
         )
-    response_payload = {
-        "success": True,
-        "message": "Honeypot endpoint reached successfully",
-        "received": response_request_data,
-    }
-    return Response(
+ 
+    return JSONResponse(
         status_code=200,
-        content=json.dumps(response_payload, indent=2, ensure_ascii=False),
-        media_type="application/json",
+        content={
+            "success": True,
+            "message": "Honeypot endpoint reached successfully",
+            "received": request_data
+        }
     )
