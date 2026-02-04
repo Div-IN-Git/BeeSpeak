@@ -1,72 +1,76 @@
 # api/process.py
-
-import json
 import os
 import sys
+import json
+import traceback
 
-# Make project root importable
+# make sure project root is importable
 sys.path.append(os.getcwd())
-
-from core.pipeline import process_message
 
 API_KEY = os.environ.get("HONEY_POT_API_KEY", "guvi-honeypot-2026")
 
+def _json_resp(status, body):
+    return {
+        "statusCode": status,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(body)
+    }
 
 def handler(request):
-    # -------- HEADERS --------
+    # quick debug info
+    try:
+        _debug = {
+            "cwd": os.getcwd(),
+            "sys_path_head": sys.path[:5],
+            "env_keys": ["HONEY_POT_API_KEY" in os.environ]
+        }
+    except Exception:
+        _debug = {"cwd": None}
+
+    # auth
     headers = {k.lower(): v for k, v in (request.headers or {}).items()}
     incoming_key = headers.get("x-api-key")
-
     if not incoming_key:
-        return {
-            "statusCode": 401,
-            "body": json.dumps({"error": "Missing x-api-key"})
-        }
+        return _json_resp(401, {"error": "Missing x-api-key", "debug": _debug})
 
     if incoming_key != API_KEY:
-        return {
-            "statusCode": 401,
-            "body": json.dumps({"error": "Invalid API key"})
-        }
+        return _json_resp(401, {"error": "Invalid x-api-key", "debug": _debug})
 
-    # -------- GET (Health) --------
     if request.method == "GET":
-        return {
-            "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({
-                "status": "SUCCESS",
-                "service": "BeeSpeak Honeypot API"
-            })
-        }
+        return _json_resp(200, {"status": "ok", "service": "BeeSpeak Honeypot API", "debug": _debug})
 
-    # -------- POST ONLY --------
     if request.method != "POST":
-        return {
-            "statusCode": 405,
-            "body": json.dumps({"error": "Method not allowed"})
-        }
+        return _json_resp(405, {"error": "Method not allowed", "debug": _debug})
 
-    # -------- BODY --------
+    # parse body safely
     try:
         payload = json.loads(request.body)
-    except Exception:
-        return {
-            "statusCode": 400,
-            "body": json.dumps({"error": "Invalid JSON body"})
-        }
+    except Exception as ex:
+        tb = traceback.format_exc()
+        return _json_resp(400, {"error": "Invalid JSON body", "detail": str(ex), "trace": tb, "debug": _debug})
 
-    # -------- PIPELINE --------
+    # Lazy import pipeline to capture import errors cleanly
+    try:
+        from core.pipeline import process_message
+    except Exception as ex:
+        tb = traceback.format_exc()
+        return _json_resp(500, {
+            "error": "ImportError in core.pipeline",
+            "detail": str(ex),
+            "traceback": tb,
+            "debug": _debug
+        })
+
+    # Run pipeline and catch errors
     try:
         result = process_message(payload)
-    except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": str(e)})
-        }
+    except Exception as ex:
+        tb = traceback.format_exc()
+        return _json_resp(500, {
+            "error": "Pipeline runtime error",
+            "detail": str(ex),
+            "traceback": tb,
+            "debug": _debug
+        })
 
-    return {
-        "statusCode": 200,
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(result)
-    }
+    return _json_resp(200, result)
