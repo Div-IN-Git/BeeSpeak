@@ -34,7 +34,7 @@ def handler(request):
         return {
             "statusCode": 200,
             "body": json.dumps({
-                "status": "ok",
+                "status": "SUCCESS",
                 "service": "BeeSpeak Honeypot API"
             })
         }
@@ -49,10 +49,10 @@ def handler(request):
         }
 
     # -----------------------------
-    # 4. READ BODY (THIS IS WHERE payload IS ASSIGNED)
+    # 4. READ BODY (VERCEL SAFE)
     # -----------------------------
     try:
-        payload = request.json()
+        payload = json.loads(request.body)
     except Exception:
         return {
             "statusCode": 400,
