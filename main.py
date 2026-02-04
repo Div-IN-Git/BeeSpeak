@@ -16,7 +16,7 @@ async def honeypot(
     except:
         body = await request.body()
 
-    safe_body = (
+    data = (
         body.decode("utf-8", errors="replace")
         if isinstance(body, bytes)
         else body
@@ -25,7 +25,7 @@ async def honeypot(
     full_request_data = {
         "timestamp": datetime.datetime.utcnow().isoformat(),
         "method": request.method,
-        "body": safe_body,
+        "data": data,
         "client_ip": request.client.host if request.client else "unknown",
         "url": str(request.url),
         "headers": dict(request.headers),
@@ -33,13 +33,11 @@ async def honeypot(
     }
 
     print("Honeypot Hit:")
-    # print(full_request_data)
+    print(full_request_data)
 
     allowed_header_keys = {
-        "accept",
         "accept-encoding",
         "content-length",
-        "content-type",
         "host",
         "user-agent",
         "x-api-key",
@@ -69,14 +67,14 @@ async def honeypot(
             content=json.dumps(response_payload, indent=2, ensure_ascii=False),
             media_type="application/json",
         )
-
-    response_payload = {
-        "success": True,
-        "message": "Honeypot endpoint reached successfully",
-        "received": response_request_data,
-    }
-    return Response(
-        status_code=200,
-        content=json.dumps(response_payload, indent=2, ensure_ascii=False),
-        media_type="application/json",
-    )
+    else:
+        response_payload = {
+            "success": True,
+            "message": "Honeypot endpoint reached successfully",
+            "received": response_request_data,
+        }
+        return Response(
+            status_code=200,
+            content=json.dumps(response_payload, indent=2, ensure_ascii=False),
+            media_type="application/json",
+        )
