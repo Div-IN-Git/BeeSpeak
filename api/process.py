@@ -1,43 +1,72 @@
+# api/process.py
+
+import json
 import os
 import sys
-from flask import Flask, request, jsonify
 
-# Ensure project root is importable
+# Make project root importable
 sys.path.append(os.getcwd())
 
 from core.pipeline import process_message
 
-app = Flask(__name__)
-
 API_KEY = os.environ.get("HONEY_POT_API_KEY", "guvi-honeypot-2026")
 
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    # ---------- AUTH ----------
-    incoming_key = request.headers.get("x-api-key")
+def handler(request):
+    # -------- HEADERS --------
+    headers = {k.lower(): v for k, v in (request.headers or {}).items()}
+    incoming_key = headers.get("x-api-key")
 
     if not incoming_key:
-        return jsonify({"error": "Missing x-api-key"}), 401
+        return {
+            "statusCode": 401,
+            "body": json.dumps({"error": "Missing x-api-key"})
+        }
 
     if incoming_key != API_KEY:
-        return jsonify({"error": "Invalid API key"}), 401
+        return {
+            "statusCode": 401,
+            "body": json.dumps({"error": "Invalid API key"})
+        }
 
-    # ---------- HEALTH ----------
+    # -------- GET (Health) --------
     if request.method == "GET":
-        return jsonify({
-            "status": "SUCCESS",
-            "service": "BeeSpeak Honeypot API"
-        })
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({
+                "status": "SUCCESS",
+                "service": "BeeSpeak Honeypot API"
+            })
+        }
 
-    # ---------- POST ----------
-    data = request.get_json(silent=True)
-    if not data:
-        return jsonify({"error": "Invalid JSON body"}), 400
+    # -------- POST ONLY --------
+    if request.method != "POST":
+        return {
+            "statusCode": 405,
+            "body": json.dumps({"error": "Method not allowed"})
+        }
 
+    # -------- BODY --------
     try:
-        result = process_message(data)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        payload = json.loads(request.body)
+    except Exception:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Invalid JSON body"})
+        }
 
-    return jsonify(result)
+    # -------- PIPELINE --------
+    try:
+        result = process_message(payload)
+    except Exception as e:
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e)})
+        }
+
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(result)
+    }
