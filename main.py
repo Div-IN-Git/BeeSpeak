@@ -6,7 +6,7 @@ import re
  
 app = FastAPI()
 
-URL_REGEX = r"(https?://[^\s]+|www\.[^\s]+)"
+URL_REGEX = r"(?:https?:\/\/)?(?:www\.)?[^\s]+\.[^\s]+"
 @app.api_route("/api/honeypot", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def honeypot(
     request: Request,
@@ -24,13 +24,15 @@ async def honeypot(
         else body
     )
     
-    message_text = ""
-    if isinstance(data, dict):
-        message_text = json.dumps(data)
-    else:
-        message_text = str(data)
+    message_text = json.dumps(data) if isinstance(data, dict) else str(data)
 
-    detected_urls = re.findall(URL_REGEX, message_text)
+    normalized_text = (
+        message_text
+        .replace("[.]", ".")
+        .replace("(.)", ".")
+    )
+
+    detected_urls = re.findall(URL_REGEX, normalized_text)
     
     full_request_data = {
         "timestamp": datetime.datetime.utcnow().isoformat(),
