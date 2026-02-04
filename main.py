@@ -10,18 +10,9 @@ async def honeypot(
     request: Request,
     x_api_key: str = Header(default=None)
 ):
-    body = None
-    try:
-        body = await request.json()
-    except:
-        body = await request.body()
+    raw_body = await request.body()
+    data = raw_body.decode("utf-8", errors="replace") if raw_body else ""
 
-    data = (
-        body.decode("utf-8", errors="replace")
-        if isinstance(body, bytes)
-        else body
-    )
-    
     full_request_data = {
         "timestamp": datetime.datetime.utcnow().isoformat(),
         "method": request.method,
@@ -52,10 +43,10 @@ async def honeypot(
         **full_request_data,
         "headers": filtered_headers,
     }
- 
+
     print("Honeypot Hit:")
     print(response_request_data)
- 
+
     if not x_api_key:
         response_payload = {
             "success": False,
