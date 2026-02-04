@@ -22,7 +22,7 @@ async def honeypot(
         else body
     )
 
-    request_data = {
+    full_request_data = {
         "timestamp": datetime.datetime.utcnow().isoformat(),
         "method": request.method,
         "url": str(request.url),
@@ -30,16 +30,39 @@ async def honeypot(
         "query_params": dict(request.query_params),
         "body": safe_body,
         "client_ip": request.client.host if request.client else "unknown",
-    } 
+    }
+
+    print("Honeypot Hit:")
+    print(full_request_data)
+
+    allowed_header_keys = {
+        "accept",
+        "accept-encoding",
+        "content-length",
+        "content-type",
+        "host",
+        "user-agent",
+        "x-api-key",
+    }
+    filtered_headers = {
+        key: value
+        for key, value in full_request_data["headers"].items()
+        if key.lower() in allowed_header_keys
+    }
+
+    response_request_data = {
+        **full_request_data,
+        "headers": filtered_headers,
+    }
  
     print("Honeypot Hit:")
-    print(request_data)
+    print(response_request_data)
  
     if not x_api_key:
         response_payload = {
             "success": False,
             "message": "Missing x-api-key",
-            "received": request_data,
+            "received": response_request_data,
         }
         return Response(
             status_code=401,
@@ -50,7 +73,7 @@ async def honeypot(
     response_payload = {
         "success": True,
         "message": "Honeypot endpoint reached successfully",
-        "received": request_data,
+        "received": response_request_data,
     }
     return Response(
         status_code=200,
