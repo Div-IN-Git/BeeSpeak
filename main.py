@@ -67,15 +67,13 @@ async def honeypot(
             content=json.dumps(response_payload, indent=2, ensure_ascii=False),
             media_type="application/json",
         )
-    else:
-        response_payload = {
-            "success": True,
-            "message": "Honeypot endpoint reached successfully",
-            "received": response_request_data,
-        }
-        return Response(
-            status_code=200,
-            content=json.dumps(response_payload, indent=2, ensure_ascii=False),
-            media_type="application/json",
-        )
-
+    response_payload = {
+        "success": True,
+        "message": "Honeypot endpoint reached successfully",
+        "received": response_request_data,
+    }
+    return Response(
+        status_code=200,
+        content=json.dumps(response_payload, indent=2, ensure_ascii=False),
+        media_type="application/json",
+    )
