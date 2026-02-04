@@ -1,7 +1,4 @@
-# api/process.py
-
 import os
-import json
 import sys
 from flask import Flask, request, jsonify
 
@@ -16,8 +13,8 @@ API_KEY = os.environ.get("HONEY_POT_API_KEY", "guvi-honeypot-2026")
 
 
 @app.route("/", methods=["GET", "POST"])
-def process():
-    # ---------------- AUTH ----------------
+def index():
+    # ---------- AUTH ----------
     incoming_key = request.headers.get("x-api-key")
 
     if not incoming_key:
@@ -26,22 +23,21 @@ def process():
     if incoming_key != API_KEY:
         return jsonify({"error": "Invalid API key"}), 401
 
-    # ---------------- GET (Health) ----------------
+    # ---------- HEALTH ----------
     if request.method == "GET":
         return jsonify({
             "status": "SUCCESS",
             "service": "BeeSpeak Honeypot API"
-        }), 200
+        })
 
-    # ---------------- POST ----------------
-    try:
-        payload = request.get_json(force=True)
-    except Exception:
+    # ---------- POST ----------
+    data = request.get_json(silent=True)
+    if not data:
         return jsonify({"error": "Invalid JSON body"}), 400
 
     try:
-        response = process_message(payload)
+        result = process_message(data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    return jsonify(response), 200
+    return jsonify(result)
