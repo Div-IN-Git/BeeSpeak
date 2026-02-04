@@ -2,9 +2,11 @@ from fastapi import FastAPI, Request, Header
 from fastapi.responses import Response
 import datetime
 import json
+import re
  
 app = FastAPI()
- 
+
+URL_REGEX = r"(https?://[^\s]+|www\.[^\s]+)"
 @app.api_route("/api/honeypot", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def honeypot(
     request: Request,
@@ -21,11 +23,20 @@ async def honeypot(
         if isinstance(body, bytes)
         else body
     )
+    
+    message_text = ""
+    if isinstance(data, dict):
+        message_text = json.dumps(data)
+    else:
+        message_text = str(data)
 
+    detected_urls = re.findall(URL_REGEX, message_text)
+    
     full_request_data = {
         "timestamp": datetime.datetime.utcnow().isoformat(),
         "method": request.method,
         "data": data,
+        "S_url": detected_urls if detected_urls else None,
         "client_ip": request.client.host if request.client else "unknown",
         "url": str(request.url),
         "headers": dict(request.headers),
