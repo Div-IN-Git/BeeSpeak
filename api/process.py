@@ -2,6 +2,9 @@
 
 import json
 import os
+import sys
+sys.path.append(os.getcwd())
+
 from core.pipeline import process_message
 
 # API KEY (set this in Vercel Environment Variables)
