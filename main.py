@@ -63,13 +63,19 @@ async def honeypot(
     except:
         body = await request.body()
 
+    safe_body = (
+        body.decode("utf-8", errors="replace")
+        if isinstance(body, bytes)
+        else body
+    )
+
     request_data = {
         "timestamp": datetime.datetime.utcnow().isoformat(),
         "method": request.method,
         "url": str(request.url),
         "headers": dict(request.headers),
         "query_params": dict(request.query_params),
-        "body": body.decode() if isinstance(body, bytes) else body,
+        "body": safe_body,
         "client_ip": request.client.host if request.client else "unknown",
     }
 
