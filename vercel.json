@@ -5,11 +5,5 @@
       "src": "api/process.py",
       "use": "@vercel/python"
     }
-  ],
-  "routes": [
-    {
-      "src": "/api/process",
-      "dest": "/api/process.py"
-    }
   ]
 }
