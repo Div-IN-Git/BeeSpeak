@@ -25,8 +25,7 @@ async def honeypot(
         "client_ip": request.client.host if request.client else "unknown",
     }
 
-    # 🔥 Logs appear in Vercel logs
-    print("🔥 Honeypot Hit:")
+    print("Honeypot Hit:")
     print(request_data)
 
     # Optional: x-api-key check (their form requires it)
@@ -48,3 +47,4 @@ async def honeypot(
             "received": request_data
         }
     )
+
