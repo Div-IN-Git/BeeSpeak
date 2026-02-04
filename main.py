@@ -33,7 +33,6 @@ async def honeypot(
     }
 
     print("Honeypot Hit:")
-    print(full_request_data)
 
     allowed_header_keys = {
         "accept",
@@ -57,6 +56,7 @@ async def honeypot(
  
     print("Honeypot Hit:")
     print(response_request_data)
+    print(full_request_data)
  
     if not x_api_key:
         response_payload = {
@@ -80,3 +80,4 @@ async def honeypot(
         content=json.dumps(response_payload, indent=2, ensure_ascii=False),
         media_type="application/json",
     )
+
