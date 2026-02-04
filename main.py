@@ -24,7 +24,16 @@ async def honeypot(
         else body
     )
     
-    message_text = json.dumps(data) if isinstance(data, dict) else str(data)
+    if data is None:
+        message_text = ""
+    elif isinstance(data, str):
+        message_text = data
+    elif isinstance(data, bytes):
+        message_text = data.decode("utf-8", errors="replace")
+    elif isinstance(data, (dict, list, tuple)):
+        message_text = json.dumps(data, ensure_ascii=False)
+    else:
+        message_text = str(data)
 
     normalized_text = (
         message_text
