@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
-@app.post("/api/honeypot")
+@app.api_route("/api/honeypot", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def honeypot(
     request: Request,
     x_api_key: str = Header(default=None)
@@ -65,3 +65,4 @@ async def honeypot(
             "reply": reply_text
         }
     )
+
