@@ -63,15 +63,78 @@ async def honeypot(
     except:
         body = await request.body()
 
-    request_data = {
-        "timestamp": datetime.datetime.utcnow().isoformat(),
-        "method": request.method,
-        "url": str(request.url),
-        "headers": dict(request.headers),
-        "query_params": dict(request.query_params),
-        "body": body.decode() if isinstance(body, bytes) else body,
-        "client_ip": request.client.host if request.client else "unknown",
-    }
+diff --git a/main.py b/main.py
+index 99c34107b4e9757eb8239b78036a3097fff37320..81b2969932c333ad64b3d9ae5941417e3747c782 100644
+--- a/main.py
++++ b/main.py
+@@ -41,59 +41,65 @@
+ #     print("=================================\n")
+ 
+ #     # ---- ALWAYS RETURN VALID JSON ----
+ #     return {
+ #         "status": "ok",
+ #     "received": True
+ # }
+ 
+ from fastapi import FastAPI, Request, Header
+ from fastapi.responses import JSONResponse
+ import datetime
+ 
+ app = FastAPI()
+ 
+ @app.api_route("/api/honeypot", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+ async def honeypot(
+     request: Request,
+     x_api_key: str = Header(default=None)
+ ):
+     body = None
+     try:
+         body = await request.json()
+     except:
+         body = await request.body()
+-    }
+
++    safe_body = (
++        body.decode("utf-8", errors="replace")
++        if isinstance(body, bytes)
++        else body
++    )
++
++    request_data = {
++        "timestamp": datetime.datetime.utcnow().isoformat(),
++        "method": request.method,
++        "url": str(request.url),
++        "headers": dict(request.headers),
++        "query_params": dict(request.query_params),
++        "body": safe_body,
++        "client_ip": request.client.host if request.client else "unknown",
++    }
+ 
+     # 🔥 Logs appear in Vercel logs
+     print("🔥 Honeypot Hit:")
+     print(request_data)
+ 
+     # Optional: x-api-key check (their form requires it)
+     if not x_api_key:
+         return JSONResponse(
+             status_code=401,
+             content={
+                 "success": False,
+                 "message": "Missing x-api-key",
+                 "received": request_data
+             }
+         )
+ 
+     return JSONResponse(
+         status_code=200,
+         content={
+             "success": True,
+             "message": "Honeypot endpoint reached successfully",
+             "received": request_data
+         }
+     )
+ 
+
 
     # 🔥 Logs appear in Vercel logs
     print("🔥 Honeypot Hit:")
@@ -96,6 +159,7 @@ async def honeypot(
             "received": request_data
         }
     )
+
 
 
 
