@@ -25,15 +25,15 @@ async def honeypot(
     full_request_data = {
         "timestamp": datetime.datetime.utcnow().isoformat(),
         "method": request.method,
+        "body": safe_body,
+        "client_ip": request.client.host if request.client else "unknown",
         "url": str(request.url),
         "headers": dict(request.headers),
         "query_params": dict(request.query_params),
-        "body": safe_body,
-        "client_ip": request.client.host if request.client else "unknown",
     }
 
     print("Honeypot Hit:")
-    #print(full_request_data)
+    # print(full_request_data)
 
     allowed_header_keys = {
         "accept",
@@ -56,7 +56,7 @@ async def honeypot(
     }
  
     print("Honeypot Hit:")
-    #print(response_request_data)
+    print(response_request_data)
  
     if not x_api_key:
         response_payload = {
@@ -80,7 +80,3 @@ async def honeypot(
         content=json.dumps(response_payload, indent=2, ensure_ascii=False),
         media_type="application/json",
     )
-
-
-
-
