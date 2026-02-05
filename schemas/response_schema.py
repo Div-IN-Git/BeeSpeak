@@ -7,5 +7,3 @@ def base_response():
         "status": "success",
         "reply": "",
     }
-
-
