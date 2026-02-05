@@ -68,3 +68,4 @@ class handler(BaseHTTPRequestHandler):
 
         self._send_json(200, result)
         self._send_json(200, result)
+
