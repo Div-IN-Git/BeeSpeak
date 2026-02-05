@@ -12,7 +12,7 @@ from core.pipeline import process_message
 API_KEY = os.environ.get("HONEY_POT_API_KEY", "guvi-honeypot-2026")
 
 
-def main(request):
+def handler(request):
     # -------- HEADERS --------
     headers = {k.lower(): v for k, v in (request.headers or {}).items()}
     incoming_key = headers.get("x-api-key")
@@ -20,14 +20,12 @@ def main(request):
     if not incoming_key:
         return {
             "statusCode": 401,
-            "headers": {"Content-Type": "application/json"},
             "body": json.dumps({"error": "Missing x-api-key"})
         }
 
     if incoming_key != API_KEY:
         return {
             "statusCode": 401,
-            "headers": {"Content-Type": "application/json"},
             "body": json.dumps({"error": "Invalid API key"})
         }
 
@@ -46,7 +44,6 @@ def main(request):
     if request.method != "POST":
         return {
             "statusCode": 405,
-            "headers": {"Content-Type": "application/json"},
             "body": json.dumps({"error": "Method not allowed"})
         }
 
@@ -56,7 +53,6 @@ def main(request):
     except Exception:
         return {
             "statusCode": 400,
-            "headers": {"Content-Type": "application/json"},
             "body": json.dumps({"error": "Invalid JSON body"})
         }
 
@@ -66,7 +62,6 @@ def main(request):
     except Exception as e:
         return {
             "statusCode": 500,
-            "headers": {"Content-Type": "application/json"},
             "body": json.dumps({"error": str(e)})
         }
 
