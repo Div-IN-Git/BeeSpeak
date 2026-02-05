@@ -1,17 +1,35 @@
 # core/pipeline.py
 from __future__ import annotations
-from core.conversation_store import append_message, get_full_history, replace_session
+
+from core.conversation_store import get_full_history, replace_session
 from rules.rule_engine import check as rule_check
 from ml.classifier import predict as ml_predict
 from core.decision import decide
 from schemas.response_schema import base_response
 from core.info_extractor import extract_entities
-from language.english import normalize as en_norm
-from language.hindi import normalize as hi_norm
-from language.tamil import normalize as ta_norm
+from language.normalize import normalize_text
 from core.session_storage import store_turn
 
 VALID_SENDERS = {"scammer", "user"}
+
+
+def _validate_payload(payload: dict):
+    if not isinstance(payload, dict):
+        raise ValueError("payload must be an object")
+    if not isinstance(payload.get("sessionId"), str) or not payload["sessionId"].strip():
+        raise ValueError("sessionId must be a non-empty string")
+
+    message = payload.get("message")
+    _validate_message(message)
+
+    conversation_history = payload.get("conversationHistory")
+    if conversation_history is None:
+        conversation_history = []
+    if not isinstance(conversation_history, list):
+        raise ValueError("conversationHistory must be an array")
+
+    for entry in conversation_history:
+        _validate_message(entry)
 
 
 def _validate_message(message):
@@ -71,7 +89,8 @@ def _build_context_text(full_history):
     return "\n".join(
         f"{entry['sender']}: {entry['text']}" for entry in full_history if entry.get("text")
     )
-    
+
+
 def _validate_and_extract_metadata(payload: dict) -> dict:
     metadata = payload.get("metadata")
     if not isinstance(metadata, dict):
@@ -88,42 +107,78 @@ def _validate_and_extract_metadata(payload: dict) -> dict:
 
     return validated
 
-def _merge_conversation_history(conversation_history: list) -> str:
-    messages = []
-    for item in conversation_history or []:
-        if isinstance(item, dict):
-            message_text = item.get("text")
-            if isinstance(message_text, str) and message_text.strip():
-                messages.append(message_text)
-        elif isinstance(item, str) and item.strip():
-            messages.append(item)
-    return "\n".join(messages)
+
+
+
+def _prepare_rule_text(raw_text: str) -> str:
+    if not isinstance(raw_text, str):
+        return ""
+    return raw_text.strip().lower()
+
+
+def _prepare_ml_text(raw_text: str) -> str:
+    return normalize_text(raw_text)
+
+def _build_agent_note(decision: dict, entities: dict) -> str:
+    notes = []
+    if decision.get("is_scam"):
+        notes.append("Scam intent detected")
+
+    if entities.get("upi_ids"):
+        notes.append("UPI ID captured")
+    if entities.get("phone_numbers"):
+        notes.append("Phone number extracted")
+    if entities.get("phishing_links"):
+        notes.append("Phishing link observed")
+    if entities.get("suspicious_keywords"):
+        notes.append("Suspicious language present")
+
+    return "; ".join(notes)
+
 
 def process_message(payload: dict):
-    text = payload["message"]["text"]
+    _validate_payload(payload)
+
+    session_id = payload["sessionId"]
+    message = payload["message"]
+    text = message["text"]
     metadata = _validate_and_extract_metadata(payload)
     language = metadata["language"]
 
-    if language.lower().startswith("hi"):
-        normalized = hi_norm(text)
-        lang_code = "hi"
-    elif language.lower().startswith("ta"):
-        normalized = ta_norm(text)
-        lang_code = "ta"
-    else:
-        normalized = en_norm(text)
-        lang_code = "en"
+    stored_history = get_full_history(session_id)
+    request_history = payload.get("conversationHistory", [])
+    merged_history = _merge_history(stored_history, request_history)
 
-    rule_result = rule_check(normalized)
+    # Pipeline order:
+    # 1) Rule engine on raw incoming message (fast path)
+    # 2) If unclear, normalize to English
+    # 3) Run English model
+    rule_text = _prepare_rule_text(text)
+    rule_result = rule_check(rule_text)
 
     ml_result = None
     if rule_result["status"] == "PASS_TO_ML":
-        ml_result = ml_predict(normalized, lang_code)
+        ml_text = _prepare_ml_text(text)
+        ml_result = ml_predict(ml_text, "en")
 
     decision = decide(rule_result, ml_result)
 
+    context_text = _build_context_text(merged_history)
+    entities = extract_entities(text, context_text)
+    agent_note = _build_agent_note(decision, entities)
+
+    updated_history = _merge_history(merged_history, [message])
+    replace_session(session_id, updated_history)
+
+    stored_session_state = store_turn(
+        session_id=session_id,
+        message=message,
+        metadata=metadata,
+        conversation_history=updated_history,
+    )
+
     response = base_response()
-    response["sessionId"] = payload["sessionId"]
+    response["sessionId"] = session_id
     response["is_scam"] = decision["is_scam"]
     response["decision_source"] = decision["decision_source"]
     response["confidence_score"] = decision["confidence"]
@@ -133,19 +188,12 @@ def process_message(payload: dict):
     response["channel"] = metadata["channel"]
     response["locale"] = metadata["locale"]
 
-    stored_session_state = store_turn(
-        session_id=payload["sessionId"],
-        message=payload.get("message", {}),
-        metadata=metadata,
-        conversation_history=payload.get("conversationHistory", []),
-    )
     response["session_context"] = {
         "channel": stored_session_state["channel"],
         "language": stored_session_state["language"],
         "locale": stored_session_state["locale"],
     }
-    
-    merged_history_text = _merge_conversation_history(payload.get("conversationHistory", []))
-    response["extracted_entities"] = extract_entities(text, merged_history_text)
+    response["agent_notes"] = agent_note
+    response["extracted_entities"] = entities
 
     return response
