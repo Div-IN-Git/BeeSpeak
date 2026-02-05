@@ -15,7 +15,7 @@ BARE_DOMAIN_REGEX = re.compile(
     r"\b(?:www\.)?[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+(?:/[\w\-./?%&=+#]*)?\b",
     re.IGNORECASE,
 )
-
+BANK_ACCOUNT_REGEX = re.compile(r"\b\d{9,18}\b")
 TRAILING_PUNCTUATION = ".,;:!?)]}>'\""
 
 
@@ -106,8 +106,10 @@ def extract_entities(text: str, conversation_text: str = "", custom_terms: list[
 
     phishing_links = _dedupe_preserve_order(urls)
     suspicious_keywords = _extract_suspicious_keywords(combined_text, custom_terms)
+    bank_accounts = _dedupe_preserve_order(BANK_ACCOUNT_REGEX.findall(combined_text))
 
     return {
+        "bank_accounts": bank_accounts,
         "upi_ids": upi_ids,
         "phone_numbers": phone_numbers,
         "phishing_links": phishing_links,
