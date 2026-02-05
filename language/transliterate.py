@@ -10,4 +10,3 @@ def transliterate_to_native(text: str, lang: str) -> str:
         return transliterate(text, sanscript.ITRANS, sanscript.TAMIL)
 
     return text
-
