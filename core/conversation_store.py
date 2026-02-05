@@ -5,36 +5,55 @@ import os
 from copy import deepcopy
 
 
-_STORE_PATH = os.path.join(
+_DEFAULT_STORE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)),
     "data",
     "conversation_store.json",
 )
+_STORE_PATH = os.getenv("BEESPEAK_STORE_PATH", _DEFAULT_STORE_PATH)
+_MEMORY_STORE = {}
 
 
 def _ensure_store_file():
-    os.makedirs(os.path.dirname(_STORE_PATH), exist_ok=True)
-    if not os.path.exists(_STORE_PATH):
-        with open(_STORE_PATH, "w", encoding="utf-8") as file:
-            json.dump({}, file)
+    if not _STORE_PATH:
+        return False
+
+    try:
+        os.makedirs(os.path.dirname(_STORE_PATH), exist_ok=True)
+        if not os.path.exists(_STORE_PATH):
+            with open(_STORE_PATH, "w", encoding="utf-8") as file:
+                json.dump({}, file)
+        return True
+    except OSError:
+        return False
 
 
 def _read_store():
-    _ensure_store_file()
-    with open(_STORE_PATH, "r", encoding="utf-8") as file:
-        try:
+    if not _ensure_store_file():
+        return deepcopy(_MEMORY_STORE)
+
+    try:
+        with open(_STORE_PATH, "r", encoding="utf-8") as file:
             data = json.load(file)
             if isinstance(data, dict):
                 return data
-        except json.JSONDecodeError:
-            pass
-    return {}
+    except (OSError, json.JSONDecodeError):
+        pass
+
+    return deepcopy(_MEMORY_STORE)
 
 
 def _write_store(store_data):
-    _ensure_store_file()
-    with open(_STORE_PATH, "w", encoding="utf-8") as file:
-        json.dump(store_data, file, ensure_ascii=False)
+    global _MEMORY_STORE
+    if not _ensure_store_file():
+        _MEMORY_STORE = deepcopy(store_data)
+        return
+
+    try:
+        with open(_STORE_PATH, "w", encoding="utf-8") as file:
+            json.dump(store_data, file, ensure_ascii=False)
+    except OSError:
+        _MEMORY_STORE = deepcopy(store_data)
 
 
 def _validate_message_shape(message_obj):
