@@ -29,6 +29,7 @@ def detect_script(text: str) -> str:
         return "MIXED"
 
     return "UNKNOWN"
+
 HINDI_ROMAN_WORDS = {
     "bhai", "kya", "hai", "ho", "kr", "rha", "jayega", "mat", "kyu"
 }
@@ -50,5 +51,3 @@ def detect_romanized_language(text: str) -> str:
         return "ROMANIZED_TAMIL"
 
     return "ENGLISH"
-
-
