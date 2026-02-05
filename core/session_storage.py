@@ -28,6 +28,13 @@ def store_turn(
             "createdAt": _utc_now_iso(),
             "updatedAt": _utc_now_iso(),
             "turns": [],
+            "finalCallback": {
+                "sent": False,
+                "sentAt": None,
+                "idempotencyKey": None,
+                "lastAttemptAt": None,
+                "lastStatus": None,
+            },
         },
     )
 
@@ -49,6 +56,75 @@ def store_turn(
     session_state["turns"].append(turn_record)
 
     return deepcopy(session_state)
+
+
+def get_callback_status(session_id: str) -> dict:
+    session_state = _SESSIONS.setdefault(
+        session_id,
+        {
+            "sessionId": session_id,
+            "channel": "",
+            "language": "",
+            "locale": "",
+            "createdAt": _utc_now_iso(),
+            "updatedAt": _utc_now_iso(),
+            "turns": [],
+            "finalCallback": {
+                "sent": False,
+                "sentAt": None,
+                "idempotencyKey": None,
+                "lastAttemptAt": None,
+                "lastStatus": None,
+            },
+        },
+    )
+    callback = session_state.setdefault(
+        "finalCallback",
+        {
+            "sent": False,
+            "sentAt": None,
+            "idempotencyKey": None,
+            "lastAttemptAt": None,
+            "lastStatus": None,
+        },
+    )
+    return deepcopy(callback)
+
+
+def update_callback_status(session_id: str, **kwargs) -> dict:
+    session_state = _SESSIONS.setdefault(
+        session_id,
+        {
+            "sessionId": session_id,
+            "channel": "",
+            "language": "",
+            "locale": "",
+            "createdAt": _utc_now_iso(),
+            "updatedAt": _utc_now_iso(),
+            "turns": [],
+            "finalCallback": {
+                "sent": False,
+                "sentAt": None,
+                "idempotencyKey": None,
+                "lastAttemptAt": None,
+                "lastStatus": None,
+            },
+        },
+    )
+    callback = session_state.setdefault(
+        "finalCallback",
+        {
+            "sent": False,
+            "sentAt": None,
+            "idempotencyKey": None,
+            "lastAttemptAt": None,
+            "lastStatus": None,
+        },
+    )
+
+    callback.update(kwargs)
+    session_state["updatedAt"] = _utc_now_iso()
+    return deepcopy(callback)
 
 
 def get_session_state(session_id: str) -> dict | None:
