@@ -144,8 +144,6 @@ def process_message(payload: dict):
     message = payload["message"]
     text = message["text"]
     metadata = _validate_and_extract_metadata(payload)
-    language = metadata["language"]
-
     stored_history = get_full_history(session_id)
     request_history = payload.get("conversationHistory", [])
     merged_history = _merge_history(stored_history, request_history)
@@ -171,7 +169,7 @@ def process_message(payload: dict):
     updated_history = _merge_history(merged_history, [message])
     replace_session(session_id, updated_history)
 
-    stored_session_state = store_turn(
+    store_turn(
         session_id=session_id,
         message=message,
         metadata=metadata,
@@ -179,23 +177,6 @@ def process_message(payload: dict):
     )
 
     response = base_response()
-    response["sessionId"] = session_id
-    response["is_scam"] = decision["is_scam"]
-    response["decision_source"] = decision["decision_source"]
-    response["confidence_score"] = decision["confidence"]
-    response["category"] = decision["category"]
-
-    response["language"] = language
-    response["channel"] = metadata["channel"]
-    response["locale"] = metadata["locale"]
-
-    response["session_context"] = {
-        "channel": stored_session_state["channel"],
-        "language": stored_session_state["language"],
-        "locale": stored_session_state["locale"],
-    }
-    response["agent_notes"] = agent_note
-    response["extracted_entities"] = entities
 
     send_final_callback_if_needed(
         session_id=session_id,
