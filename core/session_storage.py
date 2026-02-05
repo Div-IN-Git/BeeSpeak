@@ -4,6 +4,7 @@ import os
 import time
 from copy import deepcopy
 from datetime import datetime, timezone
+from typing import Optional
 
 
 _SESSIONS: dict[str, dict] = {}
@@ -52,7 +53,7 @@ def _default_session_state(session_id: str) -> dict:
     }
 
 
-def _merge_unique(target: list, incoming: list | None):
+def _merge_unique(target: list, incoming: Optional[list]):
     if not incoming:
         return
     for item in incoming:
@@ -140,7 +141,7 @@ def update_callback_status(session_id: str, **kwargs) -> dict:
     return deepcopy(callback)
 
 
-def get_session_state(session_id: str) -> dict | None:
+def get_session_state(session_id: str):
     state = _SESSIONS.get(session_id)
     if state is None:
         return None
