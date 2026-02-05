@@ -145,3 +145,8 @@ def get_session_state(session_id: str) -> dict | None:
     if state is None:
         return None
     return deepcopy(state)
+
+
+def clear_session_state(session_id: str) -> None:
+    _SESSIONS.pop(session_id, None)
+    _TRANSIENT_CONTEXT.pop(session_id, None)
