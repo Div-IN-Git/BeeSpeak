@@ -8,6 +8,24 @@ from core.info_extractor import extract_entities
 from language.english import normalize as en_norm
 from language.hindi import normalize as hi_norm
 from language.tamil import normalize as ta_norm
+from core.session_storage import store_turn
+
+
+def _validate_and_extract_metadata(payload: dict) -> dict:
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        raise ValueError("metadata must be an object")
+
+    validated: dict[str, str] = {}
+    for field_name in ("channel", "language", "locale"):
+        value = metadata.get(field_name)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"metadata.{field_name} must be a non-empty string")
+
+        # Preserve exact platform values as provided by the client (e.g. 'WhatsApp').
+        validated[field_name] = value
+
+    return validated
 
 def _merge_conversation_history(conversation_history: list) -> str:
     messages = []
@@ -22,7 +40,8 @@ def _merge_conversation_history(conversation_history: list) -> str:
 
 def process_message(payload: dict):
     text = payload["message"]["text"]
-    language = payload.get("metadata", {}).get("language", "English")
+    metadata = _validate_and_extract_metadata(payload)
+    language = metadata["language"]
 
     if language.lower().startswith("hi"):
         normalized = hi_norm(text)
@@ -57,6 +76,20 @@ def process_message(payload: dict):
         response["reasons"] = []
 
     response["language"] = language
+    response["channel"] = metadata["channel"]
+    response["locale"] = metadata["locale"]
+
+    stored_session_state = store_turn(
+        session_id=payload["sessionId"],
+        message=payload.get("message", {}),
+        metadata=metadata,
+        conversation_history=payload.get("conversationHistory", []),
+    )
+    response["session_context"] = {
+        "channel": stored_session_state["channel"],
+        "language": stored_session_state["language"],
+        "locale": stored_session_state["locale"],
+    }
     
     merged_history_text = _merge_conversation_history(payload.get("conversationHistory", []))
     response["extracted_entities"] = extract_entities(text, merged_history_text)
