@@ -29,3 +29,26 @@ def detect_script(text: str) -> str:
         return "MIXED"
 
     return "UNKNOWN"
+HINDI_ROMAN_WORDS = {
+    "bhai", "kya", "hai", "ho", "kr", "rha", "jayega", "mat", "kyu"
+}
+
+TAMIL_ROMAN_WORDS = {
+    "unga", "pannunga", "illa", "iruku", "vendam", "anna"
+}
+
+def detect_romanized_language(text: str) -> str:
+    words = set(text.lower().split())
+
+    hindi_hits = len(words & HINDI_ROMAN_WORDS)
+    tamil_hits = len(words & TAMIL_ROMAN_WORDS)
+
+    if hindi_hits > tamil_hits and hindi_hits >= 1:
+        return "ROMANIZED_HINDI"
+
+    if tamil_hits > hindi_hits and tamil_hits >= 1:
+        return "ROMANIZED_TAMIL"
+
+    return "ENGLISH"
+
+
