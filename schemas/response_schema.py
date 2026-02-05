@@ -22,6 +22,7 @@ def base_response():
         },
         "agent_notes": "",
         "reasons": [],
+        "reply": "",
         "extracted_entities": {
             "upi_ids": [],
             "phone_numbers": [],
