@@ -1,7 +1,7 @@
 # language/normalize.py
 from language.script_detect import detect_script, detect_romanized_language
-from language.transliterater import transliterate_to_native
-from language.translater import translate_to_english
+from language.transliterate import transliterate_to_native
+from language.translate import translate_to_english
 
 def normalize_text(raw_text: str) -> str:
     script = detect_script(raw_text)
@@ -26,6 +26,7 @@ def normalize_text(raw_text: str) -> str:
         return translate_to_english(raw_text)
 
     return raw_text
+
 
 
 
