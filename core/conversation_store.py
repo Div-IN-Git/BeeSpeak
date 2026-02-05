@@ -104,4 +104,3 @@ def replace_session(session_id, messages):
 def get_full_history(session_id):
     """Alias to load full history for consistency at call sites."""
     return load_session(session_id)
-
