@@ -12,7 +12,14 @@ def base_response():
         "decision_source": None,   # "rule" or "ml"
         "confidence_score": 0.0,
         "category": None,
+        "channel": None,
         "language": None,
+        "locale": None,
+        "session_context": {
+            "channel": None,
+            "language": None,
+            "locale": None,
+        },
         "agent_notes": "",
         "reasons": [],
         "extracted_entities": {
