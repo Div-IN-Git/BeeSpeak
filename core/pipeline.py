@@ -1,117 +1,142 @@
-"""Rule-based entity and keyword extraction for scam intelligence."""
-
 from __future__ import annotations
 
-import re
-from urllib.parse import urlparse, urlunparse
+from agent.controller import generate_reply
+from core.decision import decide
+from core.final_callback import send_final_callback_if_needed
+from core.info_extractor import extract_entities
+from core.session_storage import clear_session_state, store_turn
+from language.normalize import normalize_text
+from ml.classifier import predict as ml_predict
+from rules.rule_engine import check as rule_check
+from schemas.response_schema import base_response
 
-from core.settings import SUSPICIOUS_TERMS
-from rules.keyword_rules import KEYWORD_CATEGORIES
-
-UPI_REGEX = re.compile(r"\b[a-zA-Z0-9._-]{2,}@[a-zA-Z]{2,}\b")
-PHONE_REGEX = re.compile(r"(?:\+91[\s-]?|0[\s-]?)?[6-9]\d(?:[\s-]?\d){8}")
-URL_REGEX = re.compile(r"\bhttps?://[^\s<>()\[\]{}]+", re.IGNORECASE)
-BARE_DOMAIN_REGEX = re.compile(
-    r"\b(?:www\.)?[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+(?:/[\w\-./?%&=+#]*)?\b",
-    re.IGNORECASE,
-)
-BANK_ACCOUNT_REGEX = re.compile(r"\b\d{9,18}\b")
-TRAILING_PUNCTUATION = ".,;:!?)]}>'\""
+VALID_SENDERS = {"scammer", "user"}
 
 
-def _dedupe_preserve_order(values: list[str]) -> list[str]:
-    seen = set()
-    output = []
-    for value in values:
-        if value in seen:
-            continue
-        seen.add(value)
-        output.append(value)
-    return output
+def _validate_payload(payload: dict) -> None:
+    if not isinstance(payload, dict):
+        raise ValueError("payload must be an object")
 
-def _normalize_phone(raw_phone: str) -> str | None:
-    digits = re.sub(r"\D", "", raw_phone)
+    session_id = payload.get("sessionId")
+    if not isinstance(session_id, str) or not session_id.strip():
+        raise ValueError("sessionId must be a non-empty string")
 
-    if digits.startswith("91") and len(digits) == 12:
-        digits = digits[2:]
-    elif digits.startswith("0") and len(digits) == 11:
-        digits = digits[1:]
+    message = payload.get("message")
+    if not isinstance(message, dict):
+        raise ValueError("message must be an object")
 
-    if len(digits) != 10 or digits[0] not in "6789":
-        return None
+    text = message.get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("message.text must be a non-empty string")
 
-    return f"+91{digits}"
+    conversation_history = payload.get("conversationHistory")
+    if conversation_history is None:
+        payload["conversationHistory"] = []
+        conversation_history = payload["conversationHistory"]
+    if not isinstance(conversation_history, list):
+        raise ValueError("conversationHistory must be an array")
 
+    for entry in conversation_history:
+        _validate_history_entry(entry)
 
-def _normalize_url(raw_url: str) -> str:
-    cleaned = raw_url.strip().rstrip(TRAILING_PUNCTUATION)
-    if not cleaned.lower().startswith(("http://", "https://")):
-        cleaned = f"http://{cleaned}"
-
-    parsed = urlparse(cleaned)
-    scheme = parsed.scheme.lower()
-    netloc = parsed.netloc.lower()
-    path = parsed.path.rstrip("/")
-
-    return urlunparse((scheme, netloc, path, "", parsed.query, ""))
+    _validate_and_extract_metadata(payload)
 
 
-def _flatten_rule_keywords() -> list[str]:
-    keywords = []
-    for category_keywords in KEYWORD_CATEGORIES.values():
-        keywords.extend(category_keywords)
-    return keywords
+def _validate_history_entry(message: dict) -> None:
+    if not isinstance(message, dict):
+        raise ValueError("conversationHistory entries must be objects")
+
+    sender = message.get("sender")
+    text = message.get("text")
+    if sender not in VALID_SENDERS:
+        raise ValueError("conversationHistory.sender must be 'scammer' or 'user'")
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("conversationHistory.text must be a non-empty string")
 
 
-def _extract_suspicious_keywords(text: str, custom_terms: list[str] | None = None) -> list[str]:
-    lowered_text = text.lower()
-    keyword_pool = _flatten_rule_keywords() + (custom_terms or SUSPICIOUS_TERMS)
+def _validate_and_extract_metadata(payload: dict) -> dict[str, str]:
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        raise ValueError("metadata must be an object")
 
-    matches = []
-    for keyword in keyword_pool:
-        normalized_keyword = keyword.strip().lower()
-        if normalized_keyword and normalized_keyword in lowered_text:
-            matches.append(normalized_keyword)
+    validated: dict[str, str] = {}
+    for field_name in ("channel", "language", "locale"):
+        value = metadata.get(field_name)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"metadata.{field_name} must be a non-empty string")
+        validated[field_name] = value
 
-    return _dedupe_preserve_order(matches)
+    return validated
 
 
-def extract_entities(text: str, conversation_text: str = "", custom_terms: list[str] | None = None) -> dict:
-    combined_text = f"{conversation_text}\n{text}".strip()
+def _prepare_rule_text(raw_text: str) -> str:
+    return raw_text.strip().lower()
 
-    upi_ids = _dedupe_preserve_order([match.lower() for match in UPI_REGEX.findall(combined_text)])
 
-    phones = []
-    for raw_phone in PHONE_REGEX.findall(combined_text):
-        normalized_phone = _normalize_phone(raw_phone)
-        if normalized_phone:
-            phones.append(normalized_phone)
-    phone_numbers = _dedupe_preserve_order(phones)
+def _prepare_ml_text(raw_text: str) -> str:
+    return normalize_text(raw_text)
 
-    urls = []
-    explicit_url_spans = []
-    for match in URL_REGEX.finditer(combined_text):
-        explicit_url_spans.append((match.start(), match.end()))
-        urls.append(_normalize_url(match.group(0)))
 
-    for match in BARE_DOMAIN_REGEX.finditer(combined_text):
-        start, end = match.span()
-        if start > 0 and combined_text[start - 1] == "@":
-            continue
-        if end < len(combined_text) and combined_text[end:end + 1] == "@":
-            continue
-        if any(start >= s and end <= e for s, e in explicit_url_spans):
-            continue
-        urls.append(_normalize_url(match.group(0)))
+def _build_agent_note(decision: dict, entities: dict) -> str:
+    notes = []
+    if decision.get("is_scam"):
+        notes.append("Scam intent detected")
 
-    phishing_links = _dedupe_preserve_order(urls)
-    suspicious_keywords = _extract_suspicious_keywords(combined_text, custom_terms)
-    bank_accounts = _dedupe_preserve_order(BANK_ACCOUNT_REGEX.findall(combined_text))
+    if entities.get("upi_ids"):
+        notes.append("UPI ID captured")
+    if entities.get("phone_numbers"):
+        notes.append("Phone number extracted")
+    if entities.get("phishing_links"):
+        notes.append("Phishing link observed")
+    if entities.get("suspicious_keywords"):
+        notes.append("Suspicious language present")
 
-    return {
-        "bank_accounts": bank_accounts,
-        "upi_ids": upi_ids,
-        "phone_numbers": phone_numbers,
-        "phishing_links": phishing_links,
-        "suspicious_keywords": suspicious_keywords,
-    }
+    return "; ".join(notes)
+
+
+def process_message(payload: dict) -> dict:
+    _validate_payload(payload)
+
+    session_id = payload["sessionId"]
+    message = payload["message"]
+    conversation_history = payload.get("conversationHistory", [])
+    metadata = _validate_and_extract_metadata(payload)
+    text = message["text"]
+
+    rule_result = rule_check(_prepare_rule_text(text))
+
+    ml_result = None
+    if rule_result["status"] == "PASS_TO_ML":
+        ml_result = ml_predict(_prepare_ml_text(text), "en")
+
+    decision = decide(rule_result, ml_result)
+
+    context_text = "\n".join(
+        f"{entry['sender']}: {entry['text']}" for entry in conversation_history if entry.get("text")
+    )
+    entities = extract_entities(text, context_text)
+    agent_note = _build_agent_note(decision, entities)
+
+    session_state = store_turn(
+        session_id=session_id,
+        metadata=metadata,
+        scam_confidence=decision["confidence"],
+        is_scam=decision["is_scam"],
+        extracted_indicators=entities,
+    )
+
+    reply = generate_reply(conversation_history, {"sender": "scammer", "text": text})
+
+    callback_sent = send_final_callback_if_needed(
+        session_id=session_id,
+        is_scam=decision["is_scam"],
+        extracted_entities=session_state.get("extractedIndicators", {}),
+        agent_notes=agent_note,
+        total_messages_exchanged=int(len(conversation_history) + 1),
+    )
+    if callback_sent:
+        clear_session_state(session_id)
+
+    response = base_response()
+    response["reply"] = reply
+    return response
