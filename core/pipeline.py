@@ -1,14 +1,14 @@
 # core/pipeline.py
 from __future__ import annotations
 
-from core.conversation_store import get_full_history, replace_session
+from core.conversation_store import get_full_history, replace_session, teardown_session_history
 from rules.rule_engine import check as rule_check
 from ml.classifier import predict as ml_predict
 from core.decision import decide
 from schemas.response_schema import base_response
 from core.info_extractor import extract_entities
 from language.normalize import normalize_text
-from core.session_storage import store_turn
+from core.session_storage import store_turn, teardown_session_records
 from core.final_callback import send_final_callback_if_needed
 
 VALID_SENDERS = {"scammer", "user"}
@@ -137,6 +137,11 @@ def _build_agent_note(decision: dict, entities: dict) -> str:
     return "; ".join(notes)
 
 
+def _cleanup_session_after_callback(session_id: str):
+    teardown_session_history(session_id)
+    teardown_session_records(session_id)
+
+
 def process_message(payload: dict):
     _validate_payload(payload)
 
@@ -178,12 +183,15 @@ def process_message(payload: dict):
 
     response = base_response()
 
-    send_final_callback_if_needed(
+    callback_sent = send_final_callback_if_needed(
         session_id=session_id,
         is_scam=decision["is_scam"],
         extracted_entities=entities,
         agent_notes=agent_note,
         total_messages_exchanged=len(updated_history),
     )
+
+    if callback_sent:
+        _cleanup_session_after_callback(session_id)
 
     return response
