@@ -5,10 +5,6 @@ import os
 import sys
 from http.server import BaseHTTPRequestHandler
 # Make project root importable
-<<<<<<< HEAD
-=======
-
->>>>>>> b04ea15 (Update BeeSpeak core logic and rules)
 api_dir = os.path.dirname(__file__)
 project_root = os.path.abspath(os.path.join(api_dir, os.pardir))
 if project_root not in sys.path:
@@ -70,8 +66,5 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(500, {"error": str(e)})
             return
 
-<<<<<<< HEAD
         self._send_json(200, result)
-=======
         self._send_json(200, result)
->>>>>>> b04ea15 (Update BeeSpeak core logic and rules)
