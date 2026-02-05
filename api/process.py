@@ -3,70 +3,67 @@
 import json
 import os
 import sys
-
+from http.server import BaseHTTPRequestHandler
 # Make project root importable
-sys.path.append(os.getcwd())
+api_dir = os.path.dirname(__file__)
+project_root = os.path.abspath(os.path.join(api_dir, os.pardir))
+if project_root not in sys.path:
+    sys.path.append(project_root)
 
 from core.pipeline import process_message
 
 API_KEY = os.environ.get("HONEY_POT_API_KEY", "guvi-honeypot-2026")
 
 
-def handler(request):
-    # -------- HEADERS --------
-    headers = {k.lower(): v for k, v in (request.headers or {}).items()}
-    incoming_key = headers.get("x-api-key")
+class handler(BaseHTTPRequestHandler):
+    def _send_json(self, status_code, payload):
+        self.send_response(status_code)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(payload).encode("utf-8"))
 
-    if not incoming_key:
-        return {
-            "statusCode": 401,
-            "body": json.dumps({"error": "Missing x-api-key"})
-        }
+    def _authenticate(self):
+        incoming_key = self.headers.get("x-api-key")
 
-    if incoming_key != API_KEY:
-        return {
-            "statusCode": 401,
-            "body": json.dumps({"error": "Invalid API key"})
-        }
+        if not incoming_key:
+            self._send_json(401, {"error": "Missing x-api-key"})
+            return False
 
-    # -------- GET (Health) --------
-    if request.method == "GET":
-        return {
-            "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({
+        if incoming_key != API_KEY:
+            self._send_json(401, {"error": "Invalid API key"})
+            return False
+
+        return True
+
+    def do_GET(self):
+        if not self._authenticate():
+            return
+
+        self._send_json(
+            200,
+            {
                 "status": "SUCCESS",
-                "service": "BeeSpeak Honeypot API"
-            })
-        }
+                "service": "BeeSpeak Honeypot API",
+            },
+        )
 
-    # -------- POST ONLY --------
-    if request.method != "POST":
-        return {
-            "statusCode": 405,
-            "body": json.dumps({"error": "Method not allowed"})
-        }
+    def do_POST(self):
+        if not self._authenticate():
+            return
 
-    # -------- BODY --------
-    try:
-        payload = json.loads(request.body)
-    except Exception:
-        return {
-            "statusCode": 400,
-            "body": json.dumps({"error": "Invalid JSON body"})
-        }
+        content_length = int(self.headers.get("Content-Length", 0))
+        raw_body = self.rfile.read(content_length)
 
-    # -------- PIPELINE --------
-    try:
-        result = process_message(payload)
-    except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": str(e)})
-        }
+        try:
+            payload = json.loads(raw_body)
+        except Exception:
+            self._send_json(400, {"error": "Invalid JSON body"})
+            return
 
-    return {
-        "statusCode": 200,
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(result)
-    }
+        try:
+            result = process_message(payload)
+        except Exception as e:
+            self._send_json(500, {"error": str(e)})
+            return
+
+        self._send_json(200, result)
