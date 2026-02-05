@@ -1,4 +1,11 @@
-# language/hindi.py
+# language/translate.py
+from googletrans import Translator
 
-def normalize(text: str) -> str:
-    return text.lower().strip()
+translator = Translator()
+
+def translate_to_english(text: str) -> str:
+    try:
+        result = translator.translate(text, dest="en")
+        return result.text
+    except Exception:
+        return text
