@@ -9,6 +9,7 @@ from schemas.response_schema import base_response
 from core.info_extractor import extract_entities
 from language.normalize import normalize_text
 from core.session_storage import store_turn
+from core.final_callback import send_final_callback_if_needed
 
 VALID_SENDERS = {"scammer", "user"}
 
@@ -195,5 +196,13 @@ def process_message(payload: dict):
     }
     response["agent_notes"] = agent_note
     response["extracted_entities"] = entities
+
+    send_final_callback_if_needed(
+        session_id=session_id,
+        is_scam=decision["is_scam"],
+        extracted_entities=entities,
+        agent_notes=agent_note,
+        total_messages_exchanged=len(updated_history),
+    )
 
     return response
