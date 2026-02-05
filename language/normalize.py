@@ -26,8 +26,3 @@ def normalize_text(raw_text: str) -> str:
         return translate_to_english(raw_text)
 
     return raw_text
-
-
-
-
-
